@@ -16,3 +16,6 @@ inputs/pta_data/*
 
 dist/
 poetry.lock
+
+# Singularity file
+ptarcade-dev.sif

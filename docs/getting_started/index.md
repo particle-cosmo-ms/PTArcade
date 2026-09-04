@@ -127,22 +127,20 @@ using a [configuration file][config]
         year = "2023"}   
     ```
 
-!!! note "Additional Citations"
+??? note "Additional Citations"
     PTArcade can be run in two modes: Ceffyl and ENTERPRISE (for more details on how to choose differnt run modes see [here][run_mode]). 
     
     If you use PTArcade in Ceffyl mode (which is the default one), please also cite
 
     ```
-    @article{lamb2023rapid,
-        title={Rapid refitting techniques for Bayesian spectral characterization of the gravitational wave background using pulsar timing arrays},
-        author={Lamb, William G and Taylor, Stephen R and van Haasteren, Rutger},
-        journal={Physical Review D},
-        volume={108},
-        number={10},
-        pages={103019},
+    @misc{lamb2023need,
+        title={The Need For Speed: Rapid Refitting Techniques for Bayesian Spectral Characterization of the Gravitational Wave Background Using PTAs}, 
+        author={William G. Lamb and Stephen R. Taylor and Rutger van Haasteren},
         year={2023},
-        publisher={APS}
-    }
+        eprint={2303.15442},
+        archivePrefix={arXiv},
+        primaryClass={astro-ph.HE}
+        }
     ```
 
     If you use PTArcade in ENTERPRISE mode, please also cite
