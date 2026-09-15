@@ -7,6 +7,8 @@ import resource
 
 import numpyro
 
+import numpyro
+
 from astropy.utils.exceptions import AstropyDeprecationWarning
 
 from ptarcade import pta_importer
