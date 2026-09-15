@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import os
 import warnings
+import resource
+
+import numpyro
 
 import numpyro
 
@@ -50,6 +53,9 @@ from ptarcade.models_utils import ParamDict
 
 log = logging.getLogger("rich")
 numpyro.enable_x64(use_x64=True)
+
+def mem_gb():
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6  # KB -> GB auf Linux
 
 def cpu_model() -> str:
     """Get CPU info."""
@@ -189,9 +195,12 @@ def initialize_pta(inputs: dict[str, Any], psrs: list[Pulsar] | None, noise_para
         pta = signal_builder.ceffyl_builder(inputs)
 
     elif inputs["config"].mode == "discovery":
+        log.info(f"[MEM] vor convert_enterprise_pulsars_to_discovery: {mem_gb():.2f} GB")
         discovery_psrs = pta_importer.convert_enterprise_pulsars_to_discovery(
             psrs, inputs["config"].pta_data, noisedict=noise_params
         )
+        log.info(f"[MEM] nach convert_enterprise_pulsars_to_discovery: {mem_gb():.2f} GB")
+
         pta = signal_builder.discovery_builder(
             psrs=discovery_psrs,
             model=inputs["model"],
@@ -199,6 +208,7 @@ def initialize_pta(inputs: dict[str, Any], psrs: list[Pulsar] | None, noise_para
             red_components=inputs["config"].red_components,
             gwb_components=inputs["config"].gwb_components,
         )
+        log.info(f"[MEM] nach discovery_builder: {mem_gb():.2f} GB")
         pta.psrs = discovery_psrs
 
     return pta
@@ -390,16 +400,43 @@ def do_sample(inputs: dict[str, Any], sampler: PTSampler, x0: NDArray) -> None:
                 log.exception(err)
                 raise SystemExit from None
         elif inputs["config"].mode == "discovery":
+            num_chains = getattr(inputs["config"], "num_chains", 1)
+            seed = getattr(inputs["config"], "seed", 42)
+
             mcmc = numpyro.infer.MCMC(
-                sampler, num_chains=1, progress_bar=True, num_warmup=N_samples // 4, num_samples=N_samples
+                sampler,
+                num_chains=num_chains,
+                chain_method="vectorized",
+                progress_bar=True,
+                num_warmup=N_samples // 4,
+                num_samples=N_samples,
             )
-            mcmc.run(jax.random.key(42))
-            samples_df = pd.DataFrame(mcmc.get_samples())
+            console.print(f"[JAX] Devices: {jax.devices()}, Backend: {jax.default_backend()}")
+            mcmc.run(jax.random.key(seed))
+
+            def _prior_range(val):
+                from ptarcade import models_utils as aux
+                dist_obj = aux.to_numpyro_prior(val)
+                if hasattr(dist_obj, "low") and hasattr(dist_obj, "high"):
+                    return [float(dist_obj.low), float(dist_obj.high)]
+                if hasattr(dist_obj, "loc") and hasattr(dist_obj, "scale"):
+                    return [float(dist_obj.loc), float(dist_obj.scale)]
+                return str(dist_obj)
+
             parameter_dict = inputs["model"].parameters
-            prior_dict = {key: np.array(val["args"]).tolist() for key,val in parameter_dict.items()}
+            prior_dict = {key: _prior_range(val) for key, val in parameter_dict.items()}
             out_dir = Path(inputs["config"].out_dir)
             out_dir.mkdir(exist_ok=True, parents=True)
-            samples_df.to_feather(out_dir / "chain_1.feather")
+
+            if num_chains == 1:
+                samples_df = pd.DataFrame(mcmc.get_samples())
+                samples_df.to_feather(out_dir / "chain_0.feather")
+            else:
+                samples = mcmc.get_samples(group_by_chain=True)
+                for c in range(num_chains):
+                    chain_samples = {key: np.array(val[c]) for key, val in samples.items()}
+                    pd.DataFrame(chain_samples).to_feather(out_dir / f"chain_{c}.feather")
+
             with (out_dir / "priors.json").open("w") as f:
                 json.dump(prior_dict, f)
 

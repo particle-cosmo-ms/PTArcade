@@ -1,0 +1,36 @@
+Bootstrap: docker
+From: python:3.12-bookworm
+Stage: spython-base
+
+%files
+. /opt/ptarcade
+./docker-entrypoint.sh /docker-entrypoint.sh
+%labels
+maintainer="David C. Wright <david.wright@nanograv.org>"
+%post
+apt update && apt install -y --no-install-recommends libsuitesparse-dev gfortran openmpi-bin libopenmpi-dev git
+curl -sSL https://raw.githubusercontent.com/vallis/libstempo/master/install_tempo2.sh | sh -s /usr/local
+
+TEMPO2=/usr/local/share/tempo2
+
+# uv installieren
+pip install uv
+
+# Lokalen, gepatchten Code kopieren und mit uv installieren,
+# damit [tool.uv.sources] (discovery von GitHub) korrekt greift
+mkdir -p /opt/ptarcade
+cd /opt/ptarcade
+uv pip install --system . jupyterlab notebook
+uv pip install --system "jax[cuda12]==0.11.1"
+
+ldconfig
+
+chmod +x /docker-entrypoint.sh
+%environment
+export TEMPO2=/usr/local/share/tempo2
+%runscript
+cd /opt/ptarcade
+exec /docker-entrypoint.sh "$@"
+%startscript
+cd /opt/ptarcade
+exec /docker-entrypoint.sh "$@"
