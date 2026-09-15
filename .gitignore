@@ -5,6 +5,8 @@ chains/*
 
 test.sh
 
+.vscode
+
 # jupyter notebooks 
 *.ipynb
 
